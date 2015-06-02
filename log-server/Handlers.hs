@@ -5,8 +5,9 @@ import Control.Concurrent.Lifted
 import Control.Monad.Catch
 import Data.Aeson
 import Data.ByteString (ByteString)
-import Data.Foldable (foldMap)
+import Data.Foldable (toList)
 import Data.Monoid
+import Data.Monoid.Utils
 import Database.PostgreSQL.PQTypes
 import Happstack.Server hiding (body, dir, path)
 import Happstack.Server.Instances.Overlapping ()
@@ -78,6 +79,8 @@ handleApiLogs = api $ askRq >>= tryTakeMVar . rqBody >>= \case
     qr <- fmap fetchLog <$> queryResult
     return . BSB.toLazyByteString
            . wrap
-           $ foldMap (BSB.lazyByteString . encode) qr
+           . mintercalate (BSB.byteString ",")
+           . map (BSB.lazyByteString . encode)
+           $ toList qr
   where
     wrap = (BSB.byteString "{\"logs\":[" <>) . (<> BSB.byteString "]}")
