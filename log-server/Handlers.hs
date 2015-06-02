@@ -2,10 +2,9 @@ module Handlers where
 
 import Control.Applicative
 import Control.Concurrent.Lifted
-import Control.Monad.Catch
+import Control.Exception.Lifted
 import Data.Aeson
 import Data.ByteString (ByteString)
-import Data.Foldable (toList)
 import Data.Monoid
 import Data.Monoid.Utils
 import Database.PostgreSQL.PQTypes
@@ -73,14 +72,10 @@ handleApiLogs :: HandlerM Response
 handleApiLogs = api $ askRq >>= tryTakeMVar . rqBody >>= \case
   Nothing -> error "handleApiLogs: no request body"
   Just (Body body) -> do
-    runSQL_ . sqlSelectLogs $ parseLogRequest body
-    -- Exploit lazy evaluation. More memory efficient than
-    -- feeding the list of messages directly into Aeson.
-    qr <- fmap fetchLog <$> queryResult
+    logs <- streamLogs =<< parseLogRequest body
     return . BSB.toLazyByteString
            . wrap
            . mintercalate (BSB.byteString ",")
-           . map (BSB.lazyByteString . encode)
-           $ toList qr
+           $ map (BSB.lazyByteString . encode) logs
   where
     wrap = (BSB.byteString "{\"logs\":[" <>) . (<> BSB.byteString "]}")

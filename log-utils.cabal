@@ -30,6 +30,8 @@ executable log-server
                       , kontra-config
                       , lifted-base
                       , log >= 0.2.1
+                      , monad-control
+                      , random
                       , text
                       , transformers-base
                       , unjson
@@ -39,6 +41,7 @@ executable log-server
 
   default-extensions:
                         LambdaCase
+                      , FlexibleContexts
                       , OverloadedStrings
                       , RecordWildCards
                       , ScopedTypeVariables
@@ -57,7 +60,9 @@ executable log-fetcher
                       , exceptions >= 0.6
                       , hpqtypes >= 1.4
                       , invariant
+                      , lifted-base
                       , log >= 0.2.1
+                      , monad-control
                       , random
                       , text
                       , transformers-base
@@ -67,6 +72,7 @@ executable log-fetcher
 
   default-extensions:
                         LambdaCase
+                      , FlexibleContexts
                       , OverloadedStrings
                       , RecordWildCards
                       , ScopedTypeVariables

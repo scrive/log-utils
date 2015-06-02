@@ -15,6 +15,7 @@ import qualified Happstack.StaticRouting as R
 
 import Handlers
 import Happstack.Server.ReqHandler
+import SQL
 
 type MainM = LogT IO
 
@@ -32,12 +33,6 @@ main = do
     withLogger :: forall m r. Logger -> LogT m r -> m r
     withLogger = runLogT "log-server"
 
-    -- perform read only transaction
-    ts :: TransactionSettings
-    ts = def {
-      tsPermissions = ReadOnly
-    }
-
     startServer :: Logger -> LogServerConf -> ConnectionSource -> MainM ThreadId
     startServer logger LogServerConf{..} pool = do
       let handlerConf = nullConf {
@@ -50,4 +45,4 @@ main = do
           error "startServer: static routing"
         Right r -> return $ r >>= maybe (notFound $ toResponse ("Not found."::String)) return
       socket <- liftBase . bindIPv4 lscBindHost $ fromIntegral lscBindPort
-      fork . liftBase . runReqHandlerT socket handlerConf . withLogger logger . runDBT pool ts $ routes
+      fork . liftBase . runReqHandlerT socket handlerConf . withLogger logger . runDBT pool tsRO $ routes
