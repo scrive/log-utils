@@ -79,21 +79,24 @@ unjsonLogRequest = objectOf $ LogRequest
 data Stream a = Done | Next a
 
 -- | Like 'getChanContents', but allows for the list to end.
-chanToStream :: Chan (Stream a) -> IO [a]
-chanToStream chan = unsafeInterleaveIO $ readChan chan >>= \case
+varToStream :: MVar (Stream a) -> IO [a]
+varToStream mv = unsafeInterleaveIO $ takeMVar mv >>= \case
   Done   -> return []
-  Next e -> (e :) <$> chanToStream chan
+  Next e -> (e :) <$> varToStream mv
 
 ----------------------------------------
 
 -- | Return lazy list of logs streamed from the database.
+-- Note that if receiving thread won't process the whole
+-- list and exit, the producer will receive exception
+-- 'BlockedIndefinitelyOnMVar' and exit cleanly.
 streamLogs :: (MonadDB m, MonadBaseControl IO m) => LogRequest -> m [LogMessage]
 streamLogs req = do
-  chan <- newChan
+  mv <- newEmptyMVar
   void . fork . withNewConnection $ do
     uuid :: Word32 <- liftBase randomIO
     -- Stream logs from the database using a cursor.
-    let endStream = writeChan chan Done
+    let endStream = putMVar mv Done
         cursor = "log_fetcher_" <> unsafeSQL (show uuid)
         declare = runSQL_ $ smconcat [
             "DECLARE"
@@ -105,9 +108,9 @@ streamLogs req = do
     (`finally` endStream) . bracket_ declare close . fix $ \loop -> do
       n <- runSQL $ "FETCH FORWARD 1000 FROM" <+> cursor
       when (n > 0) $ do
-        mapDB_ $ writeChan chan . Next . fetchLog
+        mapDB_ $ putMVar mv . Next . fetchLog
         loop
-  liftBase $ chanToStream chan
+  liftBase $ varToStream mv
   where
     sqlSelectLogs :: LogRequest -> SQL
     sqlSelectLogs LogRequest{..} = smconcat [
