@@ -11,11 +11,11 @@ build-type:           Simple
 cabal-version:        >=1.10
 
 executable log-server
-  hs-source-dirs:     src
-  ghc-options:        -Wall -O2
+  hs-source-dirs:     inc log-server
+  ghc-options:        -Wall -O2 -funbox-strict-fields
 
-  main-is:            Main.hs
-  ghc-options:        -main-is Main
+  main-is:            LogServer.hs
+  ghc-options:        -main-is LogServer
 
   build-depends:        base < 5
                       , aeson >= 0.7
@@ -29,7 +29,7 @@ executable log-server
                       , invariant
                       , kontra-config
                       , lifted-base
-                      , log >= 0.2
+                      , log >= 0.2.1
                       , text
                       , transformers-base
                       , unjson
@@ -42,4 +42,31 @@ executable log-server
                       , OverloadedStrings
                       , RecordWildCards
                       , ScopedTypeVariables
-                      , TemplateHaskell
+
+executable log-fetcher
+  hs-source-dirs:     inc log-fetcher
+  ghc-options:        -Wall -O2 -funbox-strict-fields
+
+  main-is:            LogFetcher.hs
+  ghc-options:        -main-is LogFetcher
+
+  build-depends:        base < 5
+                      , aeson >= 0.7
+                      , bytestring
+                      , data-default
+                      , exceptions >= 0.6
+                      , hpqtypes >= 1.4
+                      , invariant
+                      , log >= 0.2.1
+                      , random
+                      , text
+                      , transformers-base
+                      , unjson
+
+  default-language:   Haskell2010
+
+  default-extensions:
+                        LambdaCase
+                      , OverloadedStrings
+                      , RecordWildCards
+                      , ScopedTypeVariables

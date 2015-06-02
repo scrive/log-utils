@@ -1,4 +1,4 @@
-module Main where
+module LogServer where
 
 import Configuration
 import Control.Concurrent.Lifted
