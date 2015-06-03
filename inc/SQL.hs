@@ -76,13 +76,11 @@ unjsonLogRequest = objectOf $ LogRequest
 
 ----------------------------------------
 
-data Stream a = Done | Next a
-
 -- | Like 'getChanContents', but allows for the list to end.
-varToStream :: MVar (Stream a) -> IO [a]
+varToStream :: MVar (Maybe a) -> IO [a]
 varToStream mv = unsafeInterleaveIO $ takeMVar mv >>= \case
-  Done   -> return []
-  Next e -> (e :) <$> varToStream mv
+  Just e  -> (e :) <$> varToStream mv
+  Nothing -> return []
 
 ----------------------------------------
 
@@ -96,7 +94,7 @@ streamLogs req = do
   void . fork . withNewConnection $ do
     uuid :: Word32 <- liftBase randomIO
     -- Stream logs from the database using a cursor.
-    let endStream = putMVar mv Done
+    let endStream = putMVar mv Nothing
         cursor = "log_fetcher_" <> unsafeSQL (show uuid)
         declare = runSQL_ $ smconcat [
             "DECLARE"
@@ -108,7 +106,7 @@ streamLogs req = do
     (`finally` endStream) . bracket_ declare close . fix $ \loop -> do
       n <- runSQL $ "FETCH FORWARD 1000 FROM" <+> cursor
       when (n > 0) $ do
-        mapDB_ $ putMVar mv . Next . fetchLog
+        mapDB_ $ putMVar mv . Just . fetchLog
         loop
   liftBase $ varToStream mv
   where
