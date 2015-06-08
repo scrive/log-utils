@@ -1,20 +1,19 @@
 module LogServer where
 
 import Configuration
-import Control.Concurrent.Lifted
 import Control.Exception.Lifted
 import Control.Monad.Base
 import Data.Default
+import Data.String
 import Database.PostgreSQL.PQTypes
-import Happstack.Server
 import Log
 import Log.Backend.StandardOutput
-import LogServerConf
+import Network.Wai
+import Network.Wai.Handler.Warp
 import qualified Data.Text.Encoding as T
-import qualified Happstack.StaticRouting as R
 
 import Handlers
-import Happstack.Server.ReqHandler
+import LogServerConf
 import SQL
 
 type MainM = LogT IO
@@ -27,22 +26,23 @@ main = do
     pool <- liftBase $ poolSource (def {
       csConnInfo = T.encodeUtf8 $ lscDBConfig conf
     }) 1 10 10
-    bracket (startServer logger conf pool) (liftBase . killThread) . const $ do
-      liftBase waitForTermination
+    startServer logger pool conf
   where
-    withLogger :: forall m r. Logger -> LogT m r -> m r
+    withLogger :: Logger -> LogT m r -> m r
     withLogger = runLogT "log-server"
 
-    startServer :: Logger -> LogServerConf -> ConnectionSource -> MainM ThreadId
-    startServer logger LogServerConf{..} pool = do
-      let handlerConf = nullConf {
-            port = fromIntegral lscBindPort
-          , logAccess = Nothing
-          }
-      routes <- case R.compile handlers of
-        Left e -> do
-          logInfo_ e
-          error "startServer: static routing"
-        Right r -> return $ r >>= maybe (notFound $ toResponse ("Not found."::String)) return
-      socket <- liftBase . bindIPv4 lscBindHost $ fromIntegral lscBindPort
-      fork . liftBase . runReqHandlerT socket handlerConf . withLogger logger . runDBT pool tsRO $ routes
+    startServer :: Logger -> ConnectionSource -> LogServerConf -> MainM ()
+    startServer logger pool LogServerConf{..} = do
+      let ss = setHost (fromString lscBindHost)
+             . setPort (fromIntegral lscBindPort)
+             . setOnExceptionResponse apiError
+             . setOnException (handleServerError logger)
+             $ defaultSettings
+      liftBase . runSettings ss $ appHandler $ withLogger logger . runDB pool
+
+    handleServerError :: Logger -> Maybe Request -> SomeException -> IO ()
+    handleServerError logger rq err = withLogger logger $ do
+      logAttention "Server error" $ object [
+          "request" .= show rq
+        , "error" .= show err
+        ]

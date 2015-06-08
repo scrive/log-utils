@@ -18,7 +18,7 @@ instance Unjson LogServerConf where
   unjsonDef = objectOf $ LogServerConf
     <$> field "bind_ip"
         lscBindHost
-        "IP to listen on, defaults to 0.0.0.0"
+        "IP to listen on, defaults to 127.0.0.1 (see http://hackage.haskell.org/package/warp/docs/Network-Wai-Handler-Warp.html#t:HostPreference for more information)"
     <*> field "bind_port"
         lscBindPort
         "Port to listen on"

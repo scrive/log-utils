@@ -1,81 +1,74 @@
-module Handlers where
+module Handlers (
+    apiError
+  , appHandler
+  ) where
 
 import Control.Applicative
-import Control.Concurrent.Lifted
-import Control.Exception.Lifted
+import Control.Exception (SomeException)
+import Control.Monad.Base
 import Data.Aeson
 import Data.ByteString (ByteString)
-import Data.Monoid
-import Data.Monoid.Utils
 import Database.PostgreSQL.PQTypes
-import Happstack.Server hiding (body, dir, path)
-import Happstack.Server.Instances.Overlapping ()
-import Happstack.Server.ReqHandler
-import Happstack.StaticRouting
 import Log
+import Network.HTTP.Types
+import Network.Wai
 import qualified Data.ByteString.Builder as BSB
-import qualified Data.ByteString.Lazy as BSL
+import qualified Data.Foldable as F
 import qualified Data.Vector as V
 
 import SQL
 
-type HandlerM = DBT (LogT (ReqHandlerT IO))
+type HandlerM = DBT (LogT IO)
+type HandlerRunner = forall r. HandlerM r -> IO r
 
-handlers :: Route (HandlerM Response)
-handlers = choice [
-    dir "api" $ choice [
-      dir "components" $ hGet  $ handleApiComponents
-    , dir "logs"       $ hPost $ handleApiLogs
-    ]
-  ]
+data HandlerEnv = HandlerEnv {
+  heRunHandler :: !HandlerRunner
+, heRequest    :: !Request
+, heRespond    :: !(Response -> IO ResponseReceived)
+}
+
+apiError :: SomeException -> Response
+apiError = responseLBS badRequest400 [(hContentType, jsonContentType)] . encode . f
   where
-    hGet  = path GET id
-    hPost = path POST id
+    f err = object ["error" .= show err]
 
 jsonContentType :: ByteString
 jsonContentType = "application/json"
 
 ----------------------------------------
 
--- Workaround for broken 'ToMessage' instances in Happstack.
-class ToBS t where
-  toBS :: t -> BSL.ByteString
-
-instance ToBS BSL.ByteString where
-  toBS = id
-
-instance ToBS Value where
-  toBS = encode
-
-api :: ToBS t => HandlerM t -> HandlerM Response
-api m = mask_ $ try m >>= \case
-  Right value -> apiOk value
-  Left (e::SomeException) -> apiError $ show e
-
-apiOk :: ToBS t => t -> HandlerM Response
-apiOk = ok . toResponseBS jsonContentType . toBS
-
-apiError :: String -> HandlerM Response
-apiError = badRequest . toResponseBS jsonContentType . encode . f
+appHandler :: HandlerRunner -> Application
+appHandler runHandler rq respond = case pathInfo rq of
+  -- We could use wai-routes for that, but there really is no point
+  -- as these routes are very simple and won't get more complicated.
+  ["api", "components"] | isGET -> handleApiComponents env
+  ["api", "logs"] | isPOST -> handleApiLogs env
+  _ -> respond $ responseLBS notFound404 [] "Nothing is here."
   where
-    f msg = object ["error" .= msg]
+    isGET  = requestMethod rq == methodGet
+    isPOST = requestMethod rq == methodPost
 
-----------------------------------------
+    env = HandlerEnv {
+      heRunHandler = runHandler
+    , heRequest = rq
+    , heRespond = respond
+    }
 
-handleApiComponents :: HandlerM Response
-handleApiComponents = api $ do
-  runSQL_ "SELECT DISTINCT component FROM logs ORDER BY component"
-  components <- V.fromList <$> fetchMany (String . runIdentity)
-  return $ object ["components" .= Array components]
-
-handleApiLogs :: HandlerM Response
-handleApiLogs = api $ askRq >>= tryTakeMVar . rqBody >>= \case
-  Nothing -> error "handleApiLogs: no request body"
-  Just (Body body) -> do
-    logs <- streamLogs =<< parseLogRequest body
-    return . BSB.toLazyByteString
-           . wrap
-           . mintercalate (BSB.byteString ",")
-           $ map (BSB.lazyByteString . encode) logs
+handleApiComponents :: HandlerEnv -> IO ResponseReceived
+handleApiComponents HandlerEnv{..} = do
+  components <- heRunHandler $ do
+    runSQL_ "SELECT DISTINCT component FROM logs ORDER BY component"
+    V.fromList <$> fetchMany (String . runIdentity)
+  heRespond . responseOk . encode $ object ["components" .= Array components]
   where
-    wrap = (BSB.byteString "{\"logs\":[" <>) . (<> BSB.byteString "]}")
+    responseOk = responseLBS ok200 [(hContentType, jsonContentType)]
+
+handleApiLogs :: HandlerEnv -> IO ResponseReceived
+handleApiLogs HandlerEnv{..} = do
+  logRq <- parseLogRequest =<< lazyRequestBody heRequest
+  heRespond . responseOk $ \write _flush -> heRunHandler $ do
+    liftBase $ write "{\"logs\":["
+    withChunkedLogs logRq $ liftBase . F.mapM_ (write . BSB.lazyByteString . encode)
+    liftBase $ write "]}"
+  where
+    responseOk = responseStream ok200 [(hContentType, jsonContentType)]
