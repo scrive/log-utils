@@ -74,8 +74,8 @@ unjsonLogRequest = objectOf $ LogRequest
 ----------------------------------------
 
 withChunkedLogs :: (MonadBase IO m, MonadDB m, MonadMask m)
-                => LogRequest -> (QueryResult LogMessage -> m ()) -> m ()
-withChunkedLogs req f = do
+                => LogRequest -> m () -> (QueryResult LogMessage -> m ()) -> m ()
+withChunkedLogs req betweenChunks f = do
   uuid :: Word32 <- liftBase randomIO
   -- Stream logs from the database using a cursor.
   let cursor = "log_fetcher_" <> unsafeSQL (show uuid)
@@ -86,11 +86,12 @@ withChunkedLogs req f = do
         , sqlSelectLogs req
         ]
       close = runSQL_ $ "CLOSE" <+> cursor
-  bracket_ declare close . fix $ \loop -> do
+  bracket_ declare close . (`fix` False) $ \loop notFirst -> do
     n <- runSQL $ "FETCH FORWARD 100 FROM" <+> cursor
     when (n > 0) $ do
+      when notFirst betweenChunks
       f . fmap fetchLog =<< queryResult
-      loop
+      loop True
 
 sqlSelectLogs :: LogRequest -> SQL
 sqlSelectLogs LogRequest{..} = smconcat [

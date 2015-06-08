@@ -20,7 +20,8 @@ main = do
   [connInfo, strRq] <- getArgs
   runDB (simpleSource $ def { csConnInfo = toBS connInfo }) $ do
     logRq <- parseLogRequest (BSL.fromStrict $ toBS strRq)
-    withChunkedLogs logRq $ F.mapM_ (liftBase . T.putStrLn . showLogMessage)
+    withChunkedLogs logRq (return ()) $ \qr -> do
+      F.mapM_ (liftBase . T.putStrLn . showLogMessage) qr
   where
     toBS :: String -> BS.ByteString
     toBS = T.encodeUtf8 . T.pack

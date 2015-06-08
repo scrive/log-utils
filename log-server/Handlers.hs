@@ -8,6 +8,7 @@ import Control.Exception (SomeException)
 import Control.Monad.Base
 import Data.Aeson
 import Data.ByteString (ByteString)
+import Data.Monoid.Utils
 import Database.PostgreSQL.PQTypes
 import Log
 import Network.HTTP.Types
@@ -68,7 +69,10 @@ handleApiLogs HandlerEnv{..} = do
   logRq <- parseLogRequest =<< lazyRequestBody heRequest
   heRespond . responseOk $ \write _flush -> heRunHandler $ do
     liftBase $ write "{\"logs\":["
-    withChunkedLogs logRq $ liftBase . F.mapM_ (write . BSB.lazyByteString . encode)
+    withChunkedLogs logRq (liftBase $ write ",") $ \qr -> liftBase $ do
+      write . mintercalate (BSB.lazyByteString ",")
+            . map (BSB.lazyByteString . encode)
+            $ F.toList qr
     liftBase $ write "]}"
   where
     responseOk = responseStream ok200 [(hContentType, jsonContentType)]
