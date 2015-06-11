@@ -3,6 +3,7 @@ module LogFetcher where
 import Control.Monad.Base
 import Data.Aeson
 import Data.Default
+import Data.IORef
 import Data.Maybe
 import Database.PostgreSQL.PQTypes
 import Log.Data
@@ -44,14 +45,14 @@ cmdLogs = Logs {
            &= typ "SQL"
 , limit     = Nothing
            &= help ("limit of fetched logs (optional, default: " ++ show defLogLimit ++ ")")
-} &= help "Fetch logs"
+} &= help "Fetch the list of log messages fulfilling set criteria"
   where
     timeFormat = "%Y-%m-%dT%H:%M:%SZ"
 
 cmdComponents :: CmdArgument
 cmdComponents = Components {
   database = defDatabase
-} &= help "Fetch components"
+} &= help "Fetch the list of available components"
 
 defDatabase :: String
 defDatabase = ""
@@ -75,8 +76,13 @@ main = do
         , fmap ("where"     .=) where_
         , fmap ("limit"     .=) limit
         ]
-      withChunkedLogs logRq (return ()) $ \qr -> do
-        F.mapM_ (liftBase . T.putStrLn . showLogMessage) qr
+      mn <- liftBase $ newIORef (0::Int)
+      withChunkedLogs logRq (return ()) $ \qr -> liftBase $ do
+        modifyIORef' mn (+ ntuples qr)
+        F.mapM_ (T.putStrLn . showLogMessage) qr
+      liftBase $ do
+        n <- readIORef mn
+        putStrLn $ show n ++ " log messages fetched."
   where
     toBS :: String -> BS.ByteString
     toBS = T.encodeUtf8 . T.pack
