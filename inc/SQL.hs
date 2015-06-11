@@ -1,6 +1,8 @@
 module SQL (
     runDB
+  , fetchComponents
   , LogRequest(..)
+  , defLogLimit
   , parseLogRequest
   , withChunkedLogs
   ) where
@@ -32,6 +34,13 @@ runDB cs = runDBT cs def {
 
 ----------------------------------------
 
+fetchComponents :: MonadDB m => m [T.Text]
+fetchComponents = do
+  runSQL_ "SELECT DISTINCT component FROM logs ORDER BY component"
+  fetchMany runIdentity
+
+----------------------------------------
+
 data LogRequest = LogRequest {
   lrComponent :: !(Maybe T.Text)
 , lrFrom      :: !UTCTime
@@ -39,6 +48,9 @@ data LogRequest = LogRequest {
 , lrWhere     :: !(Maybe (RawSQL ()))
 , lrLimit     :: !(Maybe Int)
 }
+
+defLogLimit :: Int
+defLogLimit = 10000
 
 parseLogRequest :: MonadThrow m => BSL.ByteString -> m LogRequest
 parseLogRequest s = case eitherDecode s of
@@ -69,7 +81,7 @@ unjsonLogRequest = objectOf $ LogRequest
       (invmap ((`rawSQL` ()) . T.encodeUtf8) (T.decodeUtf8 . unRawSQL) unjsonAeson)
   <*> fieldOpt "limit"
       lrLimit
-      "limit of logs (defaults to 10000)"
+      ("limit of logs (defaults to " <> T.pack (show defLogLimit) <> ")")
 
 ----------------------------------------
 
@@ -107,7 +119,7 @@ sqlSelectLogs LogRequest{..} = smconcat [
   , "ORDER BY time, insertion_time, insertion_order"
   -- Limit the amount to be fetched. To be honest, browsers
   -- will probably blow up when they receive 10k records anyway.
-  , "LIMIT" <?> fromMaybe 10000 lrLimit
+  , "LIMIT" <?> fromMaybe defLogLimit lrLimit
   ]
 
 fetchLog :: (UTCTime, T.Text, T.Text, Array1 T.Text, T.Text, JSONB Value)

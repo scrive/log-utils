@@ -57,9 +57,7 @@ appHandler runHandler rq respond = case pathInfo rq of
 
 handleApiComponents :: HandlerEnv -> IO ResponseReceived
 handleApiComponents HandlerEnv{..} = do
-  components <- heRunHandler $ do
-    runSQL_ "SELECT DISTINCT component FROM logs ORDER BY component"
-    V.fromList <$> fetchMany (String . runIdentity)
+  components <- heRunHandler $ V.fromList . map String <$> fetchComponents
   heRespond . responseOk . encode $ object ["components" .= Array components]
   where
     responseOk = responseLBS ok200 [(hContentType, jsonContentType)]

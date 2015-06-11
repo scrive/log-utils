@@ -1,12 +1,14 @@
 module LogFetcher where
 
 import Control.Monad.Base
+import Data.Aeson
 import Data.Default
+import Data.Maybe
 import Database.PostgreSQL.PQTypes
 import Log.Data
 import System.Environment
+import System.Console.CmdArgs.Implicit hiding (def)
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Foldable as F
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
@@ -14,14 +16,67 @@ import qualified Data.Text.IO as T
 
 import SQL
 
+data CmdArgument = Logs {
+  database  :: String
+, component :: Maybe String
+, from      :: Maybe String
+, to        :: Maybe String
+, where_    :: Maybe String
+, limit     :: Maybe Int
+} | Components {
+  database :: String
+} deriving (Data, Typeable)
+
+cmdLogs :: CmdArgument
+cmdLogs = Logs {
+  database  = defDatabase
+, component = Nothing
+           &= help "system component (optional)"
+           &= typ "COMPONENT"
+, from      = Nothing
+           &= help ("fetch logs since (required, format: " ++ timeFormat ++ ")")
+           &= typ "TIMESTAMP"
+, to        = Nothing
+           &= help ("fetch logs until (optional, format: " ++ timeFormat ++ ")")
+           &= typ "TIMESTAMP"
+, where_    = Nothing
+           &= help "WHERE clause to further filter logs (optional)"
+           &= typ "SQL"
+, limit     = Nothing
+           &= help ("limit of fetched logs (optional, default: " ++ show defLogLimit ++ ")")
+} &= help "Fetch logs"
+  where
+    timeFormat = "%Y-%m-%dT%H:%M:%SZ"
+
+cmdComponents :: CmdArgument
+cmdComponents = Components {
+  database = defDatabase
+} &= help "Fetch components"
+
+defDatabase :: String
+defDatabase = ""
+           &= help "database connection info (required)"
+           &= typ "CONNINFO"
+
+----------------------------------------
+
 main :: IO ()
 main = do
-  -- TODO: get arguments in a more sophisticated manner.
-  [connInfo, strRq] <- getArgs
-  runDB (simpleSource $ def { csConnInfo = toBS connInfo }) $ do
-    logRq <- parseLogRequest (BSL.fromStrict $ toBS strRq)
-    withChunkedLogs logRq (return ()) $ \qr -> do
-      F.mapM_ (liftBase . T.putStrLn . showLogMessage) qr
+  progName <- getProgName
+  cmd <- cmdArgs $ modes [cmdComponents, cmdLogs] &= program progName
+  let cs = simpleSource $ def { csConnInfo = toBS $ database cmd }
+  case cmd of
+    Components{..} -> runDB cs $ fetchComponents >>= mapM_ (liftBase . T.putStrLn)
+    Logs{..} -> runDB cs $ do
+      logRq <- parseLogRequest . encode . object $ catMaybes [
+          fmap ("component" .=) component
+        , fmap ("from"      .=) from
+        , fmap ("to"        .=) to
+        , fmap ("where"     .=) where_
+        , fmap ("limit"     .=) limit
+        ]
+      withChunkedLogs logRq (return ()) $ \qr -> do
+        F.mapM_ (liftBase . T.putStrLn . showLogMessage) qr
   where
     toBS :: String -> BS.ByteString
     toBS = T.encodeUtf8 . T.pack
