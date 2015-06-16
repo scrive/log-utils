@@ -68,6 +68,7 @@ executable log-fetcher
                       , monad-control
                       , random
                       , text
+                      , time >= 1.5
                       , transformers-base
                       , unjson
 

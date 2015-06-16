@@ -1,10 +1,14 @@
 module LogFetcher where
 
+import Control.Exception (ErrorCall(..))
+import Control.Monad
+import Control.Monad.Catch
 import Control.Monad.Base
 import Data.Aeson
 import Data.Default
 import Data.IORef
 import Data.Maybe
+import Data.Time
 import Database.PostgreSQL.PQTypes
 import Log.Data
 import System.Environment
@@ -14,6 +18,7 @@ import qualified Data.Foldable as F
 import qualified Data.Text as T
 import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
+import qualified Data.Traversable as T
 
 import SQL
 
@@ -47,7 +52,7 @@ cmdLogs = Logs {
            &= help ("limit of fetched logs (optional, default: " ++ show defLogLimit ++ ")")
 } &= help "Fetch the list of log messages fulfilling set criteria"
   where
-    timeFormat = "%Y-%m-%dT%H:%M:%SZ"
+    timeFormat = "'YYYY-MM-DD hh:mm:ss'"
 
 cmdComponents :: CmdArgument
 cmdComponents = Components {
@@ -69,10 +74,12 @@ main = do
   case cmd of
     Components{..} -> runDB cs $ fetchComponents >>= mapM_ (liftBase . T.putStrLn)
     Logs{..} -> runDB cs $ do
+      utcFrom <- T.mapM parseTime_ from
+      utcTo <- T.mapM parseTime_ to
       logRq <- parseLogRequest . encode . object $ catMaybes [
           fmap ("component" .=) component
-        , fmap ("from"      .=) from
-        , fmap ("to"        .=) to
+        , fmap ("from"      .=) utcFrom
+        , fmap ("to"        .=) utcTo
         , fmap ("where"     .=) where_
         , fmap ("limit"     .=) limit
         ]
@@ -86,3 +93,14 @@ main = do
   where
     toBS :: String -> BS.ByteString
     toBS = T.encodeUtf8 . T.pack
+
+    parseTime_ :: MonadThrow m => String -> m UTCTime
+    parseTime_ s = case mtime of
+      Just time -> return time
+      Nothing   -> throwM . ErrorCall $ "parseTime_: invalid value: " ++ s
+      where
+        mtime = msum [
+            parse "%Y-%m-%d" s
+          , parse "%Y-%m-%d %H:%M:%S%Q" s
+          ]
+        parse = parseTimeM True defaultTimeLocale
