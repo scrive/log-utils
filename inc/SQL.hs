@@ -42,7 +42,7 @@ fetchComponents = do
 
 data LogRequest = LogRequest {
   lrComponent :: !(Maybe T.Text)
-, lrFrom      :: !UTCTime
+, lrFrom      :: !(Maybe UTCTime)
 , lrTo        :: !(Maybe UTCTime)
 , lrWhere     :: !(Maybe (RawSQL ()))
 , lrLimit     :: !(Maybe Int)
@@ -66,7 +66,7 @@ unjsonLogRequest = objectOf $ LogRequest
   <$> fieldOpt "component"
       lrComponent
       "system component"
-  <*> field "from"
+  <*> fieldOpt "from"
       lrFrom
       "fetch logs since"
   <*> fieldOpt "to"
@@ -125,7 +125,8 @@ sqlSelectLogs LogRequest{..} = smconcat [
   , "SELECT" <+> concatComma (logsFields ++ delete "time" orderFields)
   , "FROM logs"
   , "WHERE" <+> (mintercalate " AND " $ catMaybes [
-      Just $ "time >=" <?> lrFrom
+      Just "TRUE"
+    , ("time >=" <?>) <$> lrFrom
     , ("time <=" <?>) <$> lrTo
     , ("component =" <?>) <$> lrComponent
     , raw <$> lrWhere
