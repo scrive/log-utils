@@ -67,7 +67,7 @@ handleApiLogs HandlerEnv{..} = do
   logRq <- parseLogRequest =<< lazyRequestBody heRequest
   heRespond . responseOk $ \write _flush -> heRunHandler $ do
     liftBase $ write "{\"logs\":["
-    withChunkedLogs logRq (liftBase $ write ",") $ \qr -> liftBase $ do
+    foldChunkedLogs logRq (\() -> liftBase $ write ",") () $ \() qr -> liftBase $ do
       write . mintercalate (BSB.lazyByteString ",")
             . map (BSB.lazyByteString . encode)
             $ F.toList qr

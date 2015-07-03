@@ -4,16 +4,14 @@ module SQL (
   , LogRequest(..)
   , defLogLimit
   , parseLogRequest
-  , withChunkedLogs
+  , foldChunkedLogs
   ) where
 
 import Control.Applicative
 import Control.Exception (ErrorCall(..))
-import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Catch
 import Data.Aeson
-import Data.Function
 import Data.Functor.Invariant
 import Data.Maybe
 import Data.Monoid
@@ -85,9 +83,13 @@ unjsonLogRequest = objectOf $ LogRequest
 
 ----------------------------------------
 
-withChunkedLogs :: (MonadBase IO m, MonadDB m, MonadMask m)
-                => LogRequest -> m () -> (QueryResult LogMessage -> m ()) -> m ()
-withChunkedLogs req betweenChunks f = do
+foldChunkedLogs :: (MonadBase IO m, MonadDB m, MonadMask m)
+                => LogRequest
+                -> (acc -> m acc)
+                -> acc
+                -> (acc -> QueryResult LogMessage -> m acc)
+                -> m acc
+foldChunkedLogs req betweenChunks initAcc f = do
   uuid :: Word32 <- liftBase randomIO
   -- Stream logs from the database using a cursor.
   let cursor = "log_fetcher_" <> unsafeSQL (show uuid)
@@ -98,12 +100,19 @@ withChunkedLogs req betweenChunks f = do
         , sqlSelectLogs req
         ]
       close = runSQL_ $ "CLOSE" <+> cursor
-  bracket_ declare close . (`fix` False) $ \loop notFirst -> do
-    n <- runSQL $ "FETCH FORWARD 100 FROM" <+> cursor
-    when (n > 0) $ do
-      when notFirst betweenChunks
-      f . fmap fetchLog =<< queryResult
-      loop True
+  bracket_ declare close $ loop cursor True initAcc
+  where
+    loop cursor firstPass acc = do
+      n <- runSQL $ "FETCH FORWARD 100 FROM" <+> cursor
+      if n == 0
+        then return acc
+        else do
+          acc' <- if firstPass
+            then return acc
+            else betweenChunks acc
+          queryResult
+            >>= f acc' . fmap fetchLog
+            >>= loop cursor False
 
 sqlSelectLogs :: LogRequest -> SQL
 sqlSelectLogs LogRequest{..} = smconcat [

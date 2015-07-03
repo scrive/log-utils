@@ -6,7 +6,6 @@ import Control.Monad.Catch
 import Control.Monad.Base
 import Data.Aeson
 import Data.Default
-import Data.IORef
 import Data.Maybe
 import Data.Time
 import Database.PostgreSQL.PQTypes
@@ -83,13 +82,10 @@ main = do
         , fmap ("where"     .=) where_
         , fmap ("limit"     .=) limit
         ]
-      mn <- liftBase $ newIORef (0::Int)
-      withChunkedLogs logRq (return ()) $ \qr -> liftBase $ do
-        modifyIORef' mn (+ ntuples qr)
+      n <- foldChunkedLogs logRq return (0::Int) $ \n qr -> liftBase $ do
         F.mapM_ (T.putStrLn . showLogMessage) qr
-      liftBase $ do
-        n <- readIORef mn
-        putStrLn $ show n ++ " log messages fetched."
+        return $! n + ntuples qr
+      liftBase $ putStrLn $ show n ++ " log messages fetched."
   where
     toBS :: String -> BS.ByteString
     toBS = T.encodeUtf8 . T.pack
