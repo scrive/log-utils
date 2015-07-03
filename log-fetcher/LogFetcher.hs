@@ -36,18 +36,23 @@ cmdLogs :: CmdArgument
 cmdLogs = Logs {
   database  = defDatabase
 , component = Nothing
+           &= name "c"
            &= help "system component (optional)"
            &= typ "COMPONENT"
 , from      = Nothing
+           &= name "f"
            &= help ("fetch logs since (required, format: " ++ timeFormat ++ ")")
            &= typ "TIMESTAMP"
 , to        = Nothing
+           &= name "t"
            &= help ("fetch logs until (optional, format: " ++ timeFormat ++ ")")
            &= typ "TIMESTAMP"
 , where_    = Nothing
+           &= name "w"
            &= help "WHERE clause to further filter logs (optional)"
            &= typ "SQL"
 , limit     = Nothing
+           &= name "l"
            &= help ("limit of fetched logs (optional, default: " ++ show defLogLimit ++ ")")
 } &= help "Fetch the list of log messages fulfilling set criteria"
   where
@@ -60,6 +65,7 @@ cmdComponents = Components {
 
 defDatabase :: String
 defDatabase = ""
+           &= name "d"
            &= help "database connection info (required)"
            &= typ "CONNINFO"
 
