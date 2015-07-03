@@ -126,7 +126,7 @@ sqlSelectLogs LogRequest{..} = smconcat [
   , "FROM logs"
   , "WHERE" <+> (mintercalate " AND " $ catMaybes [
       Just "TRUE"
-    , ("time >=" <?>) <$> lrFrom
+    , ("time >" <?>) <$> lrFrom
     , ("time <=" <?>) <$> lrTo
     , ("component =" <?>) <$> lrComponent
     , raw <$> lrWhere
