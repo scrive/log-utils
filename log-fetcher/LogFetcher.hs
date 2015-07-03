@@ -28,6 +28,7 @@ data CmdArgument = Logs {
 , to        :: Maybe String
 , where_    :: Maybe String
 , limit     :: Maybe Int
+, last_     :: Bool
 } | Components {
   database :: String
 } deriving (Data, Typeable)
@@ -54,6 +55,8 @@ cmdLogs = Logs {
 , limit     = Nothing
            &= name "l"
            &= help ("limit of fetched logs (optional, default: " ++ show defLogLimit ++ ")")
+, last_     = False
+           &= help "fetch <LIMIT> last logs instead of first ones (optional)"
 } &= help "Fetch the list of log messages fulfilling set criteria"
   where
     timeFormat = "'YYYY-MM-DD hh:mm:ss'"
@@ -87,6 +90,7 @@ main = do
         , fmap ("to"        .=) utcTo
         , fmap ("where"     .=) where_
         , fmap ("limit"     .=) limit
+        , Just $ "last" .= last_
         ]
       n <- foldChunkedLogs logRq return (0::Int) $ \n qr -> liftBase $ do
         F.mapM_ (T.putStrLn . showLogMessage) qr

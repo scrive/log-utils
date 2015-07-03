@@ -13,6 +13,7 @@ import Control.Monad.Base
 import Control.Monad.Catch
 import Data.Aeson
 import Data.Functor.Invariant
+import Data.List
 import Data.Maybe
 import Data.Monoid
 import Data.Monoid.Utils
@@ -45,6 +46,7 @@ data LogRequest = LogRequest {
 , lrTo        :: !(Maybe UTCTime)
 , lrWhere     :: !(Maybe (RawSQL ()))
 , lrLimit     :: !(Maybe Int)
+, lrLast      :: !Bool
 }
 
 defLogLimit :: Int
@@ -80,6 +82,9 @@ unjsonLogRequest = objectOf $ LogRequest
   <*> fieldOpt "limit"
       lrLimit
       ("limit of logs (defaults to " <> T.pack (show defLogLimit) <> ")")
+  <*> field "last"
+      lrLast
+      "if true, fetch <LIMIT> last logs, otherwise first ones"
 
 ----------------------------------------
 
@@ -116,20 +121,48 @@ foldChunkedLogs req betweenChunks initAcc f = do
 
 sqlSelectLogs :: LogRequest -> SQL
 sqlSelectLogs LogRequest{..} = smconcat [
-    "SELECT time, level, component, domain, message, data"
+    "WITH filtered_logs AS ("
+  , "SELECT" <+> concatComma (logsFields ++ delete "time" orderFields)
   , "FROM logs"
-  , "WHERE time >=" <?> lrFrom <+> "AND"
-  , mintercalate " AND " $ catMaybes [
-      Just "TRUE"
+  , "WHERE" <+> (mintercalate " AND " $ catMaybes [
+      Just $ "time >=" <?> lrFrom
     , ("time <=" <?>) <$> lrTo
     , ("component =" <?>) <$> lrComponent
     , raw <$> lrWhere
-     ]
-  , "ORDER BY time, insertion_time, insertion_order"
+    ])
+  , "ORDER BY" <+> (concatComma $ map (<+> orderType) orderFields)
   -- Limit the amount to be fetched. To be honest, browsers
   -- will probably blow up when they receive 10k records anyway.
   , "LIMIT" <?> fromMaybe defLogLimit lrLimit
+  , ")"
+  , "SELECT" <+> concatComma logsFields
+  , "FROM filtered_logs"
+  , "ORDER BY" <+> concatComma orderFields
   ]
+  where
+    concatComma :: [RawSQL ()] -> SQL
+    concatComma = mintercalate ", " . map raw
+
+    orderFields :: [RawSQL ()]
+    orderFields = [
+        "time"
+      , "insertion_time"
+      , "insertion_order"
+      ]
+    orderType :: RawSQL ()
+    orderType = if lrLast
+      then "DESC"
+      else "ASC"
+
+    logsFields :: [RawSQL ()]
+    logsFields = [
+        "time"
+      , "level"
+      , "component"
+      , "domain"
+      , "message"
+      , "data"
+      ]
 
 fetchLog :: (UTCTime, T.Text, T.Text, Array1 T.Text, T.Text, JSONB Value)
          -> LogMessage
