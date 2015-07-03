@@ -69,6 +69,7 @@ executable log-fetcher
                       , random
                       , text
                       , time >= 1.5
+                      , transformers
                       , transformers-base
                       , unjson
 

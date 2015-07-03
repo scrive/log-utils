@@ -1,17 +1,19 @@
 module LogFetcher where
 
+import Control.Concurrent
 import Control.Exception (ErrorCall(..))
 import Control.Monad
-import Control.Monad.Catch
 import Control.Monad.Base
+import Control.Monad.Catch
+import Control.Monad.Trans.State.Strict
 import Data.Aeson
 import Data.Default
 import Data.Maybe
 import Data.Time
 import Database.PostgreSQL.PQTypes
 import Log.Data
-import System.Environment
 import System.Console.CmdArgs.Implicit hiding (def)
+import System.Environment
 import qualified Data.ByteString as BS
 import qualified Data.Foldable as F
 import qualified Data.Text as T
@@ -29,6 +31,7 @@ data CmdArgument = Logs {
 , where_    :: Maybe String
 , limit     :: Maybe Int
 , last_     :: Bool
+, follow    :: Bool
 } | Components {
   database :: String
 } deriving (Data, Typeable)
@@ -57,6 +60,8 @@ cmdLogs = Logs {
            &= help ("limit of fetched logs (optional, default: " ++ show defLogLimit ++ ")")
 , last_     = False
            &= help "fetch <LIMIT> last logs instead of first ones (optional)"
+, follow    = False
+           &= help "output logs as they are recorded (optional, ignored if 'to' is set OR 'last' is NOT set)"
 } &= help "Fetch the list of log messages fulfilling set criteria"
   where
     timeFormat = "'YYYY-MM-DD hh:mm:ss'"
@@ -73,6 +78,13 @@ defDatabase = ""
            &= typ "CONNINFO"
 
 ----------------------------------------
+
+data LogsSt = LogsSt {
+  lsLogNumber   :: !Int
+, lsLastLogTime :: !UTCTime
+}
+
+type LogsM = StateT LogsSt (DBT IO)
 
 main :: IO ()
 main = do
@@ -92,11 +104,30 @@ main = do
         , fmap ("limit"     .=) limit
         , Just $ "last" .= last_
         ]
-      n <- foldChunkedLogs logRq return (0::Int) $ \n qr -> liftBase $ do
-        F.mapM_ (T.putStrLn . showLogMessage) qr
-        return $! n + ntuples qr
-      liftBase $ putStrLn $ show n ++ " log messages fetched."
+      (`evalStateT` LogsSt 0 (UTCTime (ModifiedJulianDay 0) 0)) $ do
+        printLogs logRq
+        if not follow || not last_ || isJust to
+          then printSummary
+          else forever . (`onException` printSummary) $ do
+            liftBase $ threadDelay 1000000
+            utcUpdatedFrom <- gets lsLastLogTime
+            printLogs logRq {
+              lrFrom = Just utcUpdatedFrom
+            , lrTo   = Nothing
+            }
   where
+    printSummary :: LogsM ()
+    printSummary = do
+      n <- gets lsLogNumber
+      liftBase $ putStrLn $ show n ++ " log messages fetched."
+
+    printLogs :: LogRequest -> LogsM ()
+    printLogs logRq = foldChunkedLogs logRq return () $ \() qr -> do
+      modify' $ \s -> s { lsLogNumber = lsLogNumber s + ntuples qr }
+      F.forM_ qr $ \lm -> do
+        modify' $ \s -> s { lsLastLogTime = lsLastLogTime s `max` lmTime lm }
+        liftBase $ T.putStrLn $ showLogMessage lm
+
     toBS :: String -> BS.ByteString
     toBS = T.encodeUtf8 . T.pack
 

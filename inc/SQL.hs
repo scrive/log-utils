@@ -122,7 +122,7 @@ foldChunkedLogs req betweenChunks initAcc f = do
 sqlSelectLogs :: LogRequest -> SQL
 sqlSelectLogs LogRequest{..} = smconcat [
     "WITH filtered_logs AS ("
-  , "SELECT" <+> concatComma (logsFields ++ delete "time" orderFields)
+  , "SELECT" <+> concatComma (unique $ logsFields ++ orderFields)
   , "FROM logs"
   , "WHERE" <+> (mintercalate " AND " $ catMaybes [
       Just "TRUE"
@@ -141,6 +141,9 @@ sqlSelectLogs LogRequest{..} = smconcat [
   , "ORDER BY" <+> concatComma orderFields
   ]
   where
+    unique :: Ord a => [a] -> [a]
+    unique = map head . group . sort
+
     concatComma :: [RawSQL ()] -> SQL
     concatComma = mintercalate ", " . map raw
 
