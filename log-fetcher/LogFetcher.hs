@@ -107,8 +107,9 @@ main = do
         , Just $ "last" .= last_
         ]
       initSt <- LogsSt <$> liftBase (newIORef 0)
-      (`runReaderT` initSt) . (`finally` printSummary) $ if follow
-        then do
+      (`runReaderT` initSt) . (`finally` printSummary) $ if not follow
+        then printLogs logRq
+        else do
           -- When following logs, start by fetching all logs recorded
           -- until 5 seconds ago and then each second fetch logs recorded
           -- between now - 6s and now - 5s. The delay is needed so that
@@ -129,9 +130,6 @@ main = do
             , lrTo    = Just $ fiveSecondsBefore now
             , lrLimit = Just maxBound
             }
-        else do
-          printLogs logRq
-          printSummary
   where
     fiveSecondsBefore :: UTCTime -> UTCTime
     fiveSecondsBefore t = (-5) `addUTCTime` t
