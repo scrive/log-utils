@@ -154,6 +154,7 @@ main = do
       where
         mtime = msum [
             parse "%Y-%m-%d" s
+          , parse "%Y-%m-%d %H:%M" s
           , parse "%Y-%m-%d %H:%M:%S%Q" s
           ]
         parse = parseTimeM True defaultTimeLocale
