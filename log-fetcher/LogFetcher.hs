@@ -1,14 +1,16 @@
 module LogFetcher where
 
+import Control.Applicative
 import Control.Concurrent
 import Control.Exception (ErrorCall(..))
 import Control.Monad
 import Control.Monad.Base
 import Control.Monad.Catch
-import Control.Monad.Trans.State.Strict
+import Control.Monad.Trans.Reader
 import Data.Aeson
 import Data.Default
 import Data.Function
+import Data.IORef
 import Data.Maybe
 import Data.Time
 import Database.PostgreSQL.PQTypes
@@ -81,10 +83,10 @@ defDatabase = ""
 ----------------------------------------
 
 data LogsSt = LogsSt {
-  lsLogNumber :: !Int
+  lsLogNumber :: !(IORef Int)
 }
 
-type LogsM = StateT LogsSt (DBT IO)
+type LogsM = ReaderT LogsSt (DBT IO)
 
 main :: IO ()
 main = do
@@ -104,8 +106,8 @@ main = do
         , fmap ("limit"     .=) limit
         , Just $ "last" .= last_
         ]
-      let initSt = LogsSt 0
-      (`evalStateT` initSt) $ if follow
+      initSt <- LogsSt <$> liftBase (newIORef 0)
+      (`runReaderT` initSt) . (`finally` printSummary) $ if follow
         then do
           -- When following logs, start by fetching all logs recorded
           -- until 5 seconds ago and then each second fetch logs recorded
@@ -119,10 +121,9 @@ main = do
             , lrLast = True
             }
           (`fix` initRq) $ \loop rq -> do
-            now <- (`onException` printSummary) $ do
-              printLogs rq
-              liftBase $ threadDelay 1000000
-              liftBase getCurrentTime
+            printLogs rq
+            liftBase $ threadDelay 1000000
+            now <- liftBase getCurrentTime
             loop $ rq {
               lrFrom  = lrTo rq
             , lrTo    = Just $ fiveSecondsBefore now
@@ -137,12 +138,12 @@ main = do
 
     printSummary :: LogsM ()
     printSummary = do
-      n <- gets lsLogNumber
+      n <- liftBase . readIORef =<< asks lsLogNumber
       liftBase $ putStrLn $ show n ++ " log messages fetched."
 
     printLogs :: LogRequest -> LogsM ()
     printLogs logRq = foldChunkedLogs logRq return () $ \() qr -> do
-      modify' $ \s -> s { lsLogNumber = lsLogNumber s + ntuples qr }
+      liftBase . (`modifyIORef'` (+ ntuples qr)) =<< asks lsLogNumber
       liftBase . F.forM_ qr $ T.putStrLn . showLogMessage
 
     toBS :: String -> BS.ByteString
