@@ -8,6 +8,7 @@ import Control.Monad.Catch
 import Control.Monad.Trans.State.Strict
 import Data.Aeson
 import Data.Default
+import Data.Function
 import Data.Maybe
 import Data.Time
 import Database.PostgreSQL.PQTypes
@@ -61,7 +62,7 @@ cmdLogs = Logs {
 , last_     = False
            &= help "fetch <LIMIT> last logs instead of first ones (optional)"
 , follow    = False
-           &= help "output logs as they are recorded (optional, ignored if 'to' is set OR 'last' is NOT set)"
+           &= help "output logs as they are recorded (with 5 seconds delay). If set, implicitly enables 'last' and overwrites 'to' (optional)"
 } &= help "Fetch the list of log messages fulfilling set criteria"
   where
     timeFormat = "'YYYY-MM-DD hh:mm:ss'"
@@ -80,8 +81,7 @@ defDatabase = ""
 ----------------------------------------
 
 data LogsSt = LogsSt {
-  lsLogNumber   :: !Int
-, lsLastLogTime :: !UTCTime
+  lsLogNumber :: !Int
 }
 
 type LogsM = StateT LogsSt (DBT IO)
@@ -104,18 +104,37 @@ main = do
         , fmap ("limit"     .=) limit
         , Just $ "last" .= last_
         ]
-      (`evalStateT` LogsSt 0 (UTCTime (ModifiedJulianDay 0) 0)) $ do
-        printLogs logRq
-        if not follow || not last_ || isJust to
-          then printSummary
-          else forever . (`onException` printSummary) $ do
-            liftBase $ threadDelay 1000000
-            utcUpdatedFrom <- gets lsLastLogTime
-            printLogs logRq {
-              lrFrom = Just utcUpdatedFrom
-            , lrTo   = Nothing
+      let initSt = LogsSt 0
+      (`evalStateT` initSt) $ if follow
+        then do
+          -- When following logs, start by fetching all logs recorded
+          -- until 5 seconds ago and then each second fetch logs recorded
+          -- between now - 6s and now - 5s. The delay is needed so that
+          -- we don't "lose" logs that might have been recorded with a
+          -- slight delay (5 seconds should be plenty of time to archive
+          -- that).
+          initRq <- liftBase $ getCurrentTime
+            >>= \now -> return logRq {
+              lrTo   = Just $ fiveSecondsBefore now
+            , lrLast = True
             }
+          (`fix` initRq) $ \loop rq -> do
+            now <- (`onException` printSummary) $ do
+              printLogs rq
+              liftBase $ threadDelay 1000000
+              liftBase getCurrentTime
+            loop $ rq {
+              lrFrom  = lrTo rq
+            , lrTo    = Just $ fiveSecondsBefore now
+            , lrLimit = Just maxBound
+            }
+        else do
+          printLogs logRq
+          printSummary
   where
+    fiveSecondsBefore :: UTCTime -> UTCTime
+    fiveSecondsBefore t = (-5) `addUTCTime` t
+
     printSummary :: LogsM ()
     printSummary = do
       n <- gets lsLogNumber
@@ -124,9 +143,7 @@ main = do
     printLogs :: LogRequest -> LogsM ()
     printLogs logRq = foldChunkedLogs logRq return () $ \() qr -> do
       modify' $ \s -> s { lsLogNumber = lsLogNumber s + ntuples qr }
-      F.forM_ qr $ \lm -> do
-        modify' $ \s -> s { lsLastLogTime = lsLastLogTime s `max` lmTime lm }
-        liftBase $ T.putStrLn $ showLogMessage lm
+      liftBase . F.forM_ qr $ T.putStrLn . showLogMessage
 
     toBS :: String -> BS.ByteString
     toBS = T.encodeUtf8 . T.pack
