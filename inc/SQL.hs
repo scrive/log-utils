@@ -50,7 +50,7 @@ data LogRequest = LogRequest {
 }
 
 defLogLimit :: Int
-defLogLimit = 10000
+defLogLimit = 1000
 
 parseLogRequest :: MonadThrow m => BSL.ByteString -> m LogRequest
 parseLogRequest s = case eitherDecode s of
