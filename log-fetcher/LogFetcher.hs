@@ -142,7 +142,7 @@ main = do
     printLogs :: LogRequest -> LogsM ()
     printLogs logRq = foldChunkedLogs logRq return () $ \() qr -> do
       liftBase . (`modifyIORef'` (+ ntuples qr)) =<< asks lsLogNumber
-      liftBase . F.forM_ qr $ T.putStrLn . showLogMessage
+      liftBase . F.forM_ qr $ \(t, lm) -> T.putStrLn $ showLogMessage (Just t) lm
 
     toBS :: String -> BS.ByteString
     toBS = T.encodeUtf8 . T.pack

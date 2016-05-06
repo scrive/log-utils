@@ -1,5 +1,5 @@
 name:                 log-utils
-version:              0.1
+version:              0.2
 synopsis:             Utils for working with logs
 homepage:             https://github.com/scrive/log-utils
 license:              BSD3
@@ -46,7 +46,8 @@ executable log-server
                       OverloadedStrings,
                       RankNTypes,
                       RecordWildCards,
-                      ScopedTypeVariables
+                      ScopedTypeVariables,
+                      TypeOperators
 
 executable log-fetcher
   hs-source-dirs:     inc log-fetcher
@@ -64,7 +65,7 @@ executable log-fetcher
                       , hpqtypes >= 1.4
                       , invariant
                       , lifted-base
-                      , log >= 0.2.1
+                      , log >= 0.4
                       , monad-control
                       , random
                       , text
@@ -82,4 +83,5 @@ executable log-fetcher
                       OverloadedStrings,
                       RankNTypes,
                       RecordWildCards,
-                      ScopedTypeVariables
+                      ScopedTypeVariables,
+                      TypeOperators

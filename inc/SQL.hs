@@ -1,3 +1,4 @@
+
 module SQL (
     runDB
   , fetchComponents
@@ -92,7 +93,7 @@ foldChunkedLogs :: (MonadBase IO m, MonadDB m, MonadMask m)
                 => LogRequest
                 -> (acc -> m acc)
                 -> acc
-                -> (acc -> QueryResult LogMessage -> m acc)
+                -> (acc -> QueryResult (UTCTime, LogMessage) -> m acc)
                 -> m acc
 foldChunkedLogs req betweenChunks initAcc f = do
   uuid :: Word32 <- liftBase randomIO
@@ -160,7 +161,8 @@ sqlSelectLogs LogRequest{..} = smconcat [
 
     logsFields :: [RawSQL ()]
     logsFields = [
-        "time"
+        "insertion_time"
+      , "time"
       , "level"
       , "component"
       , "domain"
@@ -168,14 +170,14 @@ sqlSelectLogs LogRequest{..} = smconcat [
       , "data"
       ]
 
-fetchLog :: (UTCTime, T.Text, T.Text, Array1 T.Text, T.Text, JSONB Value)
-         -> LogMessage
-fetchLog (time, level, component, Array1 domain, message, JSONB data_) =
-  LogMessage {
-    lmComponent = component
-  , lmDomain    = domain
-  , lmTime      = time
-  , lmLevel     = readLogLevel level
-  , lmMessage   = message
-  , lmData      = data_
-  }
+fetchLog :: (UTCTime, UTCTime, T.Text, T.Text, Array1 T.Text, T.Text, JSONB Value)
+         -> (UTCTime, LogMessage)
+fetchLog (insertion_time, time, level, component, Array1 domain, message, JSONB data_) =
+  (insertion_time, LogMessage {
+      lmComponent = component
+    , lmDomain    = domain
+    , lmTime      = time
+    , lmLevel     = readLogLevel level
+    , lmMessage   = message
+    , lmData      = data_
+    })
