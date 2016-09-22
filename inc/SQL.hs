@@ -25,9 +25,8 @@ import Log
 import System.Random
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 
-runDB :: (MonadBase IO m, MonadMask m) => ConnectionSource -> DBT m r -> m r
+runDB :: (MonadBase IO m, MonadMask m) => ConnectionSourceM m -> DBT m a -> m a
 runDB cs = runDBT cs def {
   tsPermissions = ReadOnly
 }
@@ -79,7 +78,7 @@ unjsonLogRequest = objectOf $ LogRequest
       -- This conversion is obviously unsafe, but the assumption
       -- is that we will use database user with constrained access
       -- rights, so it shouldn't be a problem.
-      (invmap ((`rawSQL` ()) . T.encodeUtf8) (T.decodeUtf8 . unRawSQL) unjsonAeson)
+      (invmap (`rawSQL` ()) unRawSQL unjsonAeson)
   <*> fieldOpt "limit"
       lrLimit
       ("limit of logs (defaults to " <> T.pack (show defLogLimit) <> ")")
