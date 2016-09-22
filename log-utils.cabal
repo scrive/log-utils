@@ -18,7 +18,7 @@ extra-source-files:   CHANGELOG.md,
 
 source-repository head
   type:     git
-  location: https://github.com/scrive/log-utils
+  location: https://github.com/scrive/log-utils.git
 
 executable log-server
   hs-source-dirs:     inc log-server
