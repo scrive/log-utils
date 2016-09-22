@@ -1,7 +1,8 @@
 name:                 log-utils
-version:              0.2
+version:              0.2.1
 synopsis:             Utils for working with logs
-description:          Two utilities for working with logs: log-server and log-fetcher.
+description:          Two utilities for working with logs:
+                      log-server and log-fetcher.
 homepage:             https://github.com/scrive/log-utils
 license:              BSD3
 license-file:         LICENSE
@@ -22,18 +23,21 @@ executable log-server
   hs-source-dirs:     inc log-server
   ghc-options:        -Wall -O2 -funbox-strict-fields -threaded
   main-is:            LogServer.hs
+  other-modules:      Handlers
+                      LogServerConf
+                      SQL
 
   build-depends:        base >= 4.6 && < 5
                       , aeson >= 0.7
                       , bytestring
                       , data-default
                       , exceptions >= 0.6
-                      , hpqtypes >= 1.4
+                      , hpqtypes >= 1.5
                       , http-types
                       , invariant
                       , kontra-config
                       , lifted-base
-                      , log >= 0.2.1
+                      , log >= 0.5
                       , monad-control
                       , random
                       , text
@@ -45,7 +49,7 @@ executable log-server
 
   default-language:   Haskell2010
 
-  default-extensions:
+  default-extensions: DataKinds,
                       DeriveDataTypeable,
                       FlexibleContexts,
                       LambdaCase,
@@ -59,6 +63,7 @@ executable log-fetcher
   hs-source-dirs:     inc log-fetcher
   ghc-options:        -Wall -O2 -funbox-strict-fields -threaded
   main-is:            LogFetcher.hs
+  other-modules:      SQL
 
   build-depends:        base >= 4.6 && < 5
                       , aeson >= 0.7
@@ -66,7 +71,7 @@ executable log-fetcher
                       , cmdargs
                       , data-default
                       , exceptions >= 0.6
-                      , hpqtypes >= 1.4
+                      , hpqtypes >= 1.5
                       , invariant
                       , lifted-base
                       , log >= 0.4
@@ -80,7 +85,8 @@ executable log-fetcher
 
   default-language:   Haskell2010
 
-  default-extensions: DeriveDataTypeable,
+  default-extensions: DataKinds,
+                      DeriveDataTypeable,
                       FlexibleContexts,
                       LambdaCase,
                       OverloadedStrings,

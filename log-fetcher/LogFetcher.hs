@@ -1,4 +1,4 @@
-module LogFetcher where
+module Main where
 
 import Control.Applicative
 import Control.Concurrent
@@ -92,10 +92,10 @@ main :: IO ()
 main = do
   progName <- getProgName
   cmd <- cmdArgs $ modes [cmdComponents, cmdLogs] &= program progName
-  let cs = simpleSource $ def { csConnInfo = toBS $ database cmd }
+  let cs = simpleSource $ def { csConnInfo = T.pack $ database cmd }
   case cmd of
-    Components{..} -> runDB cs $ fetchComponents >>= mapM_ (liftBase . T.putStrLn)
-    Logs{..} -> runDB cs $ do
+    Components{..} -> runDB (unConnectionSource cs) $ fetchComponents >>= mapM_ (liftBase . T.putStrLn)
+    Logs{..} -> runDB (unConnectionSource cs) $ do
       utcFrom <- T.mapM parseTime_ from
       utcTo <- T.mapM parseTime_ to
       logRq <- parseLogRequest . encode . object $ catMaybes [
@@ -143,9 +143,6 @@ main = do
     printLogs logRq = foldChunkedLogs logRq return () $ \() qr -> do
       liftBase . (`modifyIORef'` (+ ntuples qr)) =<< asks lsLogNumber
       liftBase . F.forM_ qr $ \(t, lm) -> T.putStrLn $ showLogMessage (Just t) lm
-
-    toBS :: String -> BS.ByteString
-    toBS = T.encodeUtf8 . T.pack
 
     parseTime_ :: MonadThrow m => String -> m UTCTime
     parseTime_ s = case mtime of
