@@ -38,7 +38,7 @@ executable log-server
                       , invariant
                       , kontra-config
                       , lifted-base
-                      , log >= 0.5
+                      , log >= 0.5.4
                       , monad-control
                       , random
                       , text
@@ -54,6 +54,7 @@ executable log-server
                       DeriveDataTypeable,
                       FlexibleContexts,
                       LambdaCase,
+                      NoImplicitPrelude,
                       OverloadedStrings,
                       RankNTypes,
                       RecordWildCards,
@@ -90,6 +91,7 @@ executable log-fetcher
                       DeriveDataTypeable,
                       FlexibleContexts,
                       LambdaCase,
+                      NoImplicitPrelude,
                       OverloadedStrings,
                       RankNTypes,
                       RecordWildCards,

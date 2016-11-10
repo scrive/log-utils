@@ -15,12 +15,11 @@ import Data.Maybe
 import Data.Time
 import Database.PostgreSQL.PQTypes
 import Log.Data
+import Prelude
 import System.Console.CmdArgs.Implicit hiding (def)
 import System.Environment
-import qualified Data.ByteString as BS
 import qualified Data.Foldable as F
 import qualified Data.Text as T
-import qualified Data.Text.Encoding as T
 import qualified Data.Text.IO as T
 import qualified Data.Traversable as T
 

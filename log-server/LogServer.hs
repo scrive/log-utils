@@ -11,6 +11,7 @@ import Log
 import Log.Backend.StandardOutput
 import Network.Wai
 import Network.Wai.Handler.Warp
+import Prelude
 
 import Handlers
 import LogServerConf
@@ -21,15 +22,14 @@ type MainM = LogT IO
 main :: IO ()
 main = do
   conf <- readConfig putStrLn "log_server.conf"
-  logger <- stdoutLogger
-  (`finally` waitForLogger logger) . withLogger logger $ do
+  withSimpleStdOutLogger $ \logger -> runLogger logger $ do
     pool <- liftBase $ poolSource (def {
       csConnInfo = lscDBConfig conf
     }) 1 10 10
     startServer logger pool conf
   where
-    withLogger :: Logger -> LogT m r -> m r
-    withLogger = runLogT "log-server"
+    runLogger :: Logger -> LogT m r -> m r
+    runLogger = runLogT "log-server"
 
     startServer :: Logger -> ConnectionSource '[MonadBase IO, MonadMask]
                 -> LogServerConf -> LogT IO ()
@@ -40,10 +40,10 @@ main = do
              . setOnException (handleServerError logger)
              $ defaultSettings
       liftBase . runSettings ss $ appHandler
-        $ withLogger logger . runDB (unConnectionSource pool)
+        $ runLogger logger . runDB (unConnectionSource pool)
 
     handleServerError :: Logger -> Maybe Request -> SomeException -> IO ()
-    handleServerError logger rq err = withLogger logger $ do
+    handleServerError logger rq err = runLogger logger $ do
       logAttention "Server error" $ object [
           "request" .= show rq
         , "error" .= show err
