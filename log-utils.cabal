@@ -7,7 +7,9 @@ homepage:             https://github.com/scrive/log-utils
 license:              BSD3
 license-file:         LICENSE
 author:               Scrive AB
-maintainer:           Andrzej Rybczak <andrzej@scrive.com>
+maintainer:           Andrzej Rybczak <andrzej@scrive.com>,
+                      Jonathan Jouty <jonathan@scrive.com>,
+                      Mikhail Glushenkov <mikhail@scrive.com>
 copyright:            Scrive AB
 category:             Data
 build-type:           Simple
