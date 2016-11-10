@@ -1,3 +1,6 @@
+# log-utils 0.2.2
+* upgrade to log-0.5.4
+
 # log-utils 0.2.1
 * convert to hpqtypes-1.5
 

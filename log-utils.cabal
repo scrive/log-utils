@@ -1,5 +1,5 @@
 name:                 log-utils
-version:              0.2.1
+version:              0.2.2
 synopsis:             Utils for working with logs
 description:          Two utilities for working with logs:
                       log-server and log-fetcher.
