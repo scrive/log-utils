@@ -13,6 +13,7 @@ import Database.PostgreSQL.PQTypes
 import Log
 import Network.HTTP.Types
 import Network.Wai
+import Prelude
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.Foldable as F
 import qualified Data.Vector as V

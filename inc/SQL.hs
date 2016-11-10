@@ -22,6 +22,7 @@ import Data.Unjson
 import Data.Word
 import Database.PostgreSQL.PQTypes
 import Log
+import Prelude
 import System.Random
 import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Text as T

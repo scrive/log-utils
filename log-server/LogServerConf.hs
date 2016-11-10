@@ -4,8 +4,10 @@ module LogServerConf (
 
 import Control.Applicative
 import Data.Default
+import Data.Monoid
 import Data.Unjson
 import Data.Word
+import Prelude
 import qualified Data.Text as T
 
 data LogServerConf = LogServerConf {
@@ -18,7 +20,10 @@ instance Unjson LogServerConf where
   unjsonDef = objectOf $ LogServerConf
     <$> field "bind_ip"
         lscBindHost
-        "IP to listen on, defaults to 127.0.0.1 (see http://hackage.haskell.org/package/warp/docs/Network-Wai-Handler-Warp.html#t:HostPreference for more information)"
+        ("IP to listen on, defaults to 127.0.0.1 (see "
+         <> "http://hackage.haskell.org/package/warp/docs/"
+         <> "Network-Wai-Handler-Warp.html#t:HostPreference"
+         <> " for more information)")
     <*> field "bind_port"
         lscBindPort
         "Port to listen on"
