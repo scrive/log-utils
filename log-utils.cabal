@@ -40,7 +40,7 @@ executable log-server
                       , invariant
                       , kontra-config
                       , lifted-base
-                      , log >= 0.5.4
+                      , log-base >= 0.7
                       , monad-control
                       , random
                       , text
@@ -78,7 +78,7 @@ executable log-fetcher
                       , hpqtypes >= 1.5
                       , invariant
                       , lifted-base
-                      , log >= 0.4
+                      , log-base >= 0.7
                       , monad-control
                       , random
                       , text
